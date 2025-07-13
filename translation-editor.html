@@ -104,6 +104,45 @@
             font-size: 13px;
             word-break: break-word;
             border-right: 1px solid #bdc3c7;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            position: relative;
+            user-select: none;
+        }
+
+        .key-cell:hover {
+            background: #d5dbdb;
+            transform: scale(1.02);
+        }
+
+        .key-cell:active {
+            transform: scale(0.98);
+            background: #bdc3c7;
+        }
+
+        .key-cell::after {
+            content: '📋';
+            position: absolute;
+            top: 2px;
+            right: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 10px;
+        }
+
+        .key-cell:hover::after {
+            opacity: 0.7;
+        }
+
+        .key-copied {
+            background: #2ecc71 !important;
+            color: white;
+        }
+
+        .key-copied::after {
+            content: '✓';
+            opacity: 1 !important;
+            color: white;
         }
 
         .translation-cell {
@@ -497,9 +536,42 @@
         };
 
         // Translation Row Component
-        const TranslationRow = ({ translationKey, translations, onUpdate, isModified }) => {
+        const TranslationRow = ({ translationKey, translations, onUpdate, isModified, onShowToast }) => {
+            const [keyCopied, setKeyCopied] = useState(false);
+
             const handleChange = (lang, value) => {
                 onUpdate(translationKey, lang, value);
+            };
+
+            const handleKeyClick = async () => {
+                try {
+                    await navigator.clipboard.writeText(translationKey);
+                    setKeyCopied(true);
+                    onShowToast(`Key "${translationKey}" copied to clipboard!`);
+                    
+                    // Reset the copied state after 2 seconds
+                    setTimeout(() => {
+                        setKeyCopied(false);
+                    }, 2000);
+                } catch (error) {
+                    console.error('Failed to copy key:', error);
+                    // Fallback for older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = translationKey;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        setKeyCopied(true);
+                        onShowToast(`Key "${translationKey}" copied to clipboard!`);
+                        setTimeout(() => {
+                            setKeyCopied(false);
+                        }, 2000);
+                    } catch (fallbackError) {
+                        onShowToast('Failed to copy key to clipboard', 'error');
+                    }
+                    document.body.removeChild(textArea);
+                }
             };
 
             // Validate each translation
@@ -527,7 +599,11 @@
             };
 
             return html`
-                <div class="key-cell ${isModified ? 'modified' : ''}">${translationKey}</div>
+                <div 
+                    class="key-cell ${isModified ? 'modified' : ''} ${keyCopied ? 'key-copied' : ''}"
+                    onClick=${handleKeyClick}
+                    title="Click to copy key to clipboard"
+                >${translationKey}</div>
                 <div class="translation-cell ${isModified ? 'modified' : ''}">
                     <textarea 
                         value=${translations.en[translationKey] || ''}
@@ -1291,6 +1367,7 @@
                                         translations=${translations}
                                         onUpdate=${handleTranslationUpdate}
                                         isModified=${modifiedKeys.has(key)}
+                                        onShowToast=${showToast}
                                     />
                                 `)}
                             </div>
