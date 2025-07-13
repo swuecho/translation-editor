@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preact Translation Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            background: #fff;
+            border-bottom: 1px solid #e1e1e1;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #2980b9;
+        }
+
+        .btn.save {
+            background: #27ae60;
+        }
+
+        .btn.save:hover {
+            background: #229954;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .translation-grid {
+            display: grid;
+            grid-template-columns: 200px 1fr 1fr 1fr;
+            gap: 2px;
+            background: #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .header-cell {
+            background: #34495e;
+            color: white;
+            padding: 12px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .key-cell {
+            background: #ecf0f1;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            word-break: break-word;
+            border-right: 1px solid #bdc3c7;
+        }
+
+        .translation-cell {
+            background: white;
+            padding: 8px;
+        }
+
+        .translation-cell textarea {
+            width: 100%;
+            min-height: 40px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 14px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .translation-cell textarea:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+            background: white;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .modified {
+            background-color: #fff3cd !important;
+            border-left: 4px solid #ffc107;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #27ae60;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toast.error {
+            background: #e74c3c;
+        }
+
+        @media (max-width: 768px) {
+            .translation-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header-cell:first-child {
+                display: none;
+            }
+            
+            .key-cell {
+                border-right: none;
+                border-bottom: 1px solid #bdc3c7;
+                background: #2c3e50;
+                color: white;
+                font-weight: bold;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script type="module">
+        import { render, h } from 'https://esm.sh/preact@10.19.3';
+        import { useState, useEffect, useCallback } from 'https://esm.sh/preact@10.19.3/hooks';
+        import htm from 'https://esm.sh/htm@3.1.1';
+
+        const html = htm.bind(h);
+
+        // Toast Component
+        const Toast = ({ message, type, show, onHide }) => {
+            useEffect(() => {
+                if (show) {
+                    const timer = setTimeout(onHide, 3000);
+                    return () => clearTimeout(timer);
+                }
+            }, [show, onHide]);
+
+            return html`
+                <div class="toast ${show ? 'show' : ''} ${type === 'error' ? 'error' : ''}">
+                    ${message}
+                </div>
+            `;
+        };
+
+        // Stats Component
+        const Stats = ({ totalKeys, modifiedKeys, filteredKeys }) => {
+            return html`
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-number">${totalKeys}</div>
+                        <div class="stat-label">Total Keys</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${modifiedKeys}</div>
+                        <div class="stat-label">Modified</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${filteredKeys}</div>
+                        <div class="stat-label">Showing</div>
+                    </div>
+                </div>
+            `;
+        };
+
+        // Translation Row Component
+        const TranslationRow = ({ translationKey, translations, onUpdate, isModified }) => {
+            const handleChange = (lang, value) => {
+                onUpdate(translationKey, lang, value);
+            };
+
+            return html`
+                <div class="key-cell ${isModified ? 'modified' : ''}">${translationKey}</div>
+                <div class="translation-cell ${isModified ? 'modified' : ''}">
+                    <textarea 
+                        value=${translations.en[translationKey] || ''}
+                        onInput=${(e) => handleChange('en', e.target.value)}
+                    />
+                </div>
+                <div class="translation-cell ${isModified ? 'modified' : ''}">
+                    <textarea 
+                        value=${translations.hk[translationKey] || ''}
+                        onInput=${(e) => handleChange('hk', e.target.value)}
+                    />
+                </div>
+                <div class="translation-cell ${isModified ? 'modified' : ''}">
+                    <textarea 
+                        value=${translations.zh[translationKey] || ''}
+                        onInput=${(e) => handleChange('zh', e.target.value)}
+                    />
+                </div>
+            `;
+        };
+
+        // Header Component
+        const Header = ({ searchValue, onSearchChange, onSave, onExport, onExportToDirectory, onReset }) => {
+            return html`
+                <div class="header">
+                    <h1>Translation Editor</h1>
+                    <div class="controls">
+                        <div class="search-box">
+                            <input 
+                                type="text" 
+                                placeholder="Search translation keys..." 
+                                value=${searchValue}
+                                onInput=${(e) => onSearchChange(e.target.value)}
+                            />
+                        </div>
+                        <button class="btn save" onClick=${onSave}>Save All</button>
+                        <button class="btn" onClick=${onExport}>Export JSON</button>
+                        <button class="btn" onClick=${onExportToDirectory}>Export to Directory</button>
+                        <button class="btn" onClick=${onReset}>Reset Changes</button>
+                    </div>
+                </div>
+            `;
+        };
+
+        // Main App Component
+        const App = () => {
+            const [translations, setTranslations] = useState({
+                en: {},
+                hk: {},
+                zh: {}
+            });
+            const [originalTranslations, setOriginalTranslations] = useState({});
+            const [modifiedKeys, setModifiedKeys] = useState(new Set());
+            const [searchValue, setSearchValue] = useState('');
+            const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+            // Load translations
+            useEffect(() => {
+                const loadTranslations = async () => {
+                    try {
+                        const [enRes, hkRes, zhRes] = await Promise.all([
+                            fetch('./src/translation/en/HK/hk.json'),
+                            fetch('./src/translation/hk/HK/hk.json'),
+                            fetch('./src/translation/zh/HK/hk.json')
+                        ]);
+
+                        const enData = await enRes.json();
+                        const hkData = await hkRes.json();
+                        const zhData = await zhRes.json();
+
+                        const newTranslations = {
+                            en: enData,
+                            hk: hkData,
+                            zh: zhData
+                        };
+
+                        setTranslations(newTranslations);
+                        setOriginalTranslations(JSON.parse(JSON.stringify(newTranslations)));
+                    } catch (error) {
+                        console.error('Error loading translations:', error);
+                        showToast('Error loading translation files', 'error');
+                    }
+                };
+
+                loadTranslations();
+            }, []);
+
+            const showToast = useCallback((message, type = 'success') => {
+                setToast({ show: true, message, type });
+            }, []);
+
+            const hideToast = useCallback(() => {
+                setToast(prev => ({ ...prev, show: false }));
+            }, []);
+
+            const handleTranslationUpdate = useCallback((key, lang, value) => {
+                setTranslations(prev => ({
+                    ...prev,
+                    [lang]: {
+                        ...prev[lang],
+                        [key]: value
+                    }
+                }));
+
+                // Check if this key should be marked as modified
+                setModifiedKeys(prev => {
+                    const newModified = new Set(prev);
+                    
+                    // Check if any language for this key differs from original
+                    const isModified = ['en', 'hk', 'zh'].some(l => {
+                        const currentValue = l === lang ? value : translations[l][key] || '';
+                        const originalValue = originalTranslations[l]?.[key] || '';
+                        return currentValue !== originalValue;
+                    });
+
+                    if (isModified) {
+                        newModified.add(key);
+                    } else {
+                        newModified.delete(key);
+                    }
+
+                    return newModified;
+                });
+            }, [translations, originalTranslations]);
+
+            const handleSave = useCallback(() => {
+                const dataStr = JSON.stringify(translations, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'translations-backup.json';
+                link.click();
+                
+                setOriginalTranslations(JSON.parse(JSON.stringify(translations)));
+                setModifiedKeys(new Set());
+                showToast('Translations saved successfully!');
+            }, [translations, showToast]);
+
+            const handleExport = useCallback(() => {
+                const files = {
+                    'en-HK-hk.json': JSON.stringify(translations.en, null, 2),
+                    'hk-HK-hk.json': JSON.stringify(translations.hk, null, 2),
+                    'zh-HK-hk.json': JSON.stringify(translations.zh, null, 2)
+                };
+
+                Object.entries(files).forEach(([filename, content]) => {
+                    const blob = new Blob([content], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = filename;
+                    link.click();
+                });
+
+                showToast('Translation files exported!');
+            }, [translations, showToast]);
+
+            const handleExportToDirectory = useCallback(async () => {
+                // Check if File System Access API is supported
+                if ('showDirectoryPicker' in window) {
+                    try {
+                        const dirHandle = await window.showDirectoryPicker();
+                        
+                        const files = [
+                            { path: 'src/translation/en/HK/hk.json', content: JSON.stringify(translations.en, null, 2) },
+                            { path: 'src/translation/hk/HK/hk.json', content: JSON.stringify(translations.hk, null, 2) },
+                            { path: 'src/translation/zh/HK/hk.json', content: JSON.stringify(translations.zh, null, 2) }
+                        ];
+
+                        for (const file of files) {
+                            // Create nested directories if needed
+                            const pathParts = file.path.split('/');
+                            const fileName = pathParts.pop();
+                            
+                            let currentDir = dirHandle;
+                            for (const part of pathParts) {
+                                try {
+                                    currentDir = await currentDir.getDirectoryHandle(part, { create: true });
+                                } catch (error) {
+                                    console.error(`Error creating directory ${part}:`, error);
+                                }
+                            }
+
+                            // Write the file
+                            const fileHandle = await currentDir.getFileHandle(fileName, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(file.content);
+                            await writable.close();
+                        }
+
+                        showToast('Files exported to selected directory!');
+                        
+                        // Update original translations since we've "saved" them
+                        setOriginalTranslations(JSON.parse(JSON.stringify(translations)));
+                        setModifiedKeys(new Set());
+                        
+                    } catch (error) {
+                        if (error.name === 'AbortError') {
+                            showToast('Export cancelled', 'error');
+                        } else {
+                            console.error('Error exporting to directory:', error);
+                            showToast('Error exporting to directory', 'error');
+                        }
+                    }
+                } else {
+                    // Fallback for browsers without File System Access API
+                    showToast('Directory selection not supported in this browser. Using regular download.', 'error');
+                    handleExport();
+                }
+            }, [translations, showToast, handleExport, setOriginalTranslations, setModifiedKeys]);
+
+            const handleReset = useCallback(() => {
+                if (modifiedKeys.size === 0) {
+                    showToast('No changes to reset');
+                    return;
+                }
+
+                if (confirm('Are you sure you want to reset all changes?')) {
+                    setTranslations(JSON.parse(JSON.stringify(originalTranslations)));
+                    setModifiedKeys(new Set());
+                    showToast('Changes reset successfully');
+                }
+            }, [modifiedKeys, originalTranslations, showToast]);
+
+            // Get all unique keys
+            const allKeys = new Set([
+                ...Object.keys(translations.en),
+                ...Object.keys(translations.hk),
+                ...Object.keys(translations.zh)
+            ]);
+
+            // Filter keys based on search
+            const filteredKeys = Array.from(allKeys).filter(key => 
+                key.toLowerCase().includes(searchValue.toLowerCase()) ||
+                (translations.en[key] || '').toLowerCase().includes(searchValue.toLowerCase()) ||
+                (translations.hk[key] || '').toLowerCase().includes(searchValue.toLowerCase()) ||
+                (translations.zh[key] || '').toLowerCase().includes(searchValue.toLowerCase())
+            ).sort();
+
+            return html`
+                <div>
+                    <${Header} 
+                        searchValue=${searchValue}
+                        onSearchChange=${setSearchValue}
+                        onSave=${handleSave}
+                        onExport=${handleExport}
+                        onReset=${handleReset}
+                    />
+                    
+                    <div class="container">
+                        <${Stats} 
+                            totalKeys=${allKeys.size}
+                            modifiedKeys=${modifiedKeys.size}
+                            filteredKeys=${filteredKeys.length}
+                        />
+
+                        ${filteredKeys.length === 0 ? html`
+                            <div class="no-results">
+                                No translations found matching your search.
+                            </div>
+                        ` : html`
+                            <div class="translation-grid">
+                                <div class="header-cell">Key</div>
+                                <div class="header-cell">English</div>
+                                <div class="header-cell">Traditional Chinese (HK)</div>
+                                <div class="header-cell">Simplified Chinese</div>
+                                
+                                ${filteredKeys.map(key => html`
+                                    <${TranslationRow}
+                                        key=${key}
+                                        translationKey=${key}
+                                        translations=${translations}
+                                        onUpdate=${handleTranslationUpdate}
+                                        isModified=${modifiedKeys.has(key)}
+                                    />
+                                `)}
+                            </div>
+                        `}
+                    </div>
+
+                    <${Toast} 
+                        message=${toast.message}
+                        type=${toast.type}
+                        show=${toast.show}
+                        onHide=${hideToast}
+                    />
+                </div>
+            `;
+        };
+
+        render(html`<${App} />`, document.getElementById('app'));
+    </script>
+</body>
+</html>
