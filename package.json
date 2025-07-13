@@ -1,0 +1,49 @@
+{
+  "name": "@echowuhao/translation-editor",
+  "version": "1.0.0",
+  "description": "A simple, standalone translation editor for managing multi-language JSON files",
+  "main": "dist/index.html",
+  "bin": {
+    "translation-editor": "./bin/serve.js"
+  },
+  "files": [
+    "dist/",
+    "bin/",
+    "translation-editor.html",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "serve": "node bin/serve.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "translation",
+    "i18n",
+    "internationalization",
+    "editor",
+    "json",
+    "multilingual",
+    "localization"
+  ],
+  "author": "Hao Wu echowuhao@gmail.com",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "open": "^8.4.0"
+  },
+  "devDependencies": {
+    "fs-extra": "^11.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/swuecho/translation-editor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/swuecho/translation-editor/issues"
+  },
+  "homepage": "https://github.com/swuecho/translation-editor#readme"
+}
