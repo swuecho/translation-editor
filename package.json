@@ -1,6 +1,6 @@
 {
   "name": "@echowuhao/translation-editor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A simple, standalone translation editor for managing multi-language JSON files",
   "main": "dist/index.html",
   "bin": {
