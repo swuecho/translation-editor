@@ -1197,10 +1197,19 @@
             }, [translations, showToast]);
 
             const handleExport = useCallback(() => {
+                // Helper function to create sorted JSON with minimal diffs
+                const createSortedJSON = (translations) => {
+                    const sorted = {};
+                    Object.keys(translations).sort().forEach(key => {
+                        sorted[key] = translations[key];
+                    });
+                    return JSON.stringify(sorted, null, 2);
+                };
+
                 const files = {
-                    'en-HK-hk.json': JSON.stringify(translations.en, null, 2),
-                    'hk-HK-hk.json': JSON.stringify(translations.hk, null, 2),
-                    'zh-HK-hk.json': JSON.stringify(translations.zh, null, 2)
+                    'en-HK-hk.json': createSortedJSON(translations.en),
+                    'hk-HK-hk.json': createSortedJSON(translations.hk),
+                    'zh-HK-hk.json': createSortedJSON(translations.zh)
                 };
 
                 Object.entries(files).forEach(([filename, content]) => {
@@ -1219,6 +1228,10 @@
                 // Check if File System Access API is supported
                 if ('showDirectoryPicker' in window) {
                     try {
+                        // Warn user about potential page reload
+                        const proceed = confirm('The page may reload during export due to live server. Continue anyway?\n\n(Tip: You can disable live server auto-reload temporarily to avoid this)');
+                        if (!proceed) return;
+                        
                         const dirHandle = await window.showDirectoryPicker();
                         
                         // Infer export paths from config load paths (remove ./ prefix if present)
@@ -1226,34 +1239,104 @@
                             return loadPath.startsWith('./') ? loadPath.slice(2) : loadPath;
                         };
 
+                        // Helper function to create sorted JSON with minimal diffs
+                        const createSortedJSON = (translations) => {
+                            const sorted = {};
+                            Object.keys(translations).sort().forEach(key => {
+                                sorted[key] = translations[key];
+                            });
+                            return JSON.stringify(sorted, null, 2);
+                        };
+
+                        // Helper function to check if content has changed
+                        const hasContentChanged = (newContent, originalContent) => {
+                            return newContent !== originalContent;
+                        };
+
                         const files = [
-                            { path: getExportPath(config.paths.en), content: JSON.stringify(translations.en, null, 2) },
-                            { path: getExportPath(config.paths.hk), content: JSON.stringify(translations.hk, null, 2) },
-                            { path: getExportPath(config.paths.zh), content: JSON.stringify(translations.zh, null, 2) }
+                            { 
+                                path: getExportPath(config.paths.en), 
+                                content: createSortedJSON(translations.en),
+                                original: createSortedJSON(originalTranslations.en || {}),
+                                lang: 'en'
+                            },
+                            { 
+                                path: getExportPath(config.paths.hk), 
+                                content: createSortedJSON(translations.hk),
+                                original: createSortedJSON(originalTranslations.hk || {}),
+                                lang: 'hk'
+                            },
+                            { 
+                                path: getExportPath(config.paths.zh), 
+                                content: createSortedJSON(translations.zh),
+                                original: createSortedJSON(originalTranslations.zh || {}),
+                                lang: 'zh'
+                            }
                         ];
 
-                        for (const file of files) {
-                            // Create nested directories if needed
-                            const pathParts = file.path.split('/');
-                            const fileName = pathParts.pop();
-                            
-                            let currentDir = dirHandle;
-                            for (const part of pathParts) {
+                        // Filter to only files that have actually changed
+                        const changedFiles = files.filter(file => hasContentChanged(file.content, file.original));
+                        
+                        if (changedFiles.length === 0) {
+                            showToast('No changes to export');
+                            return;
+                        }
+                        
+                        console.log(`Files to export: ${changedFiles.map(f => f.lang).join(', ')} (${changedFiles.length}/${files.length} changed)`);
+
+                        // Prevent page reload during export
+                        const preventReload = (e) => {
+                            e.preventDefault();
+                            e.returnValue = '';
+                            return '';
+                        };
+                        window.addEventListener('beforeunload', preventReload);
+                        
+                        try {
+                            // Write only changed files in parallel 
+                            const writePromises = changedFiles.map(async (file, index) => {
                                 try {
-                                    currentDir = await currentDir.getDirectoryHandle(part, { create: true });
+                                    // Create nested directories if needed
+                                    const pathParts = file.path.split('/');
+                                    const fileName = pathParts.pop();
+                                    
+                                    let currentDir = dirHandle;
+                                    for (const part of pathParts) {
+                                        currentDir = await currentDir.getDirectoryHandle(part, { create: true });
+                                    }
+
+                                    // Write the file
+                                    const fileHandle = await currentDir.getFileHandle(fileName, { create: true });
+                                    const writable = await fileHandle.createWritable();
+                                    await writable.write(file.content);
+                                    await writable.close();
+                                    
+                                    console.log(`✓ Successfully exported: ${file.path}`);
+                                    return { success: true, path: file.path };
                                 } catch (error) {
-                                    console.error(`Error creating directory ${part}:`, error);
+                                    console.error(`✗ Error exporting ${file.path}:`, error);
+                                    return { success: false, path: file.path, error: error.message };
                                 }
+                            });
+
+                            // Wait for all files to be written
+                            const results = await Promise.all(writePromises);
+                            
+                            // Check results and show any errors
+                            const successful = results.filter(r => r.success);
+                            const failed = results.filter(r => !r.success);
+                            
+                            console.log(`Export complete: ${successful.length} successful, ${failed.length} failed`);
+                            if (failed.length > 0) {
+                                failed.forEach(f => showToast(`Error exporting ${f.path}: ${f.error}`, 'error'));
                             }
 
-                            // Write the file
-                            const fileHandle = await currentDir.getFileHandle(fileName, { create: true });
-                            const writable = await fileHandle.createWritable();
-                            await writable.write(file.content);
-                            await writable.close();
+                            const successMsg = `${successful.length} file(s) exported (${successful.map(f => f.path.split('/').pop()).join(', ')})`;
+                            showToast(successMsg);
+                        } finally {
+                            // Remove the reload prevention
+                            window.removeEventListener('beforeunload', preventReload);
                         }
-
-                        showToast('Files exported to selected directory!');
                         
                         // Update original translations since we've "saved" them
                         setOriginalTranslations(JSON.parse(JSON.stringify(translations)));
