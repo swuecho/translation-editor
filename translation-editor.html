@@ -925,7 +925,7 @@
         };
 
         // Header Component
-        const Header = ({ searchValue, onSearchChange, onSave, onExport, onExportToDirectory, onReset, onConfig }) => {
+        const Header = ({ searchValue, onSearchChange, onSave, onExportToDirectory, onExportToCSV, onReset, onConfig }) => {
             return html`
                 <div class="header">
                     <h1>Translation Editor</h1>
@@ -938,9 +938,9 @@
                                 onInput=${(e) => onSearchChange(e.target.value)}
                             />
                         </div>
-                        <button class="btn save" onClick=${onSave}>Save All</button>
-                        <button class="btn" onClick=${onExport}>Export JSON</button>
+                        <button class="btn save" onClick=${onSave}>Backup</button>
                         <button class="btn" onClick=${onExportToDirectory}>Export to Directory</button>
+                        <button class="btn" onClick=${onExportToCSV}>Export to CSV</button>
                         <button class="btn secondary" onClick=${onConfig}>Config</button>
                         <button class="btn" onClick=${onReset}>Reset Changes</button>
                     </div>
@@ -1183,6 +1183,48 @@
             }, [translations, originalTranslations]);
 
             const handleSave = useCallback(() => {
+                // Log changed keys before backup, grouped by locale
+                const logChangedKeys = () => {
+                    const changesByLocale = {
+                        en: {},
+                        hk: {},
+                        zh: {}
+                    };
+                    
+                    // Get all modified keys
+                    Array.from(modifiedKeys).forEach(key => {
+                        const original = {
+                            en: originalTranslations.en?.[key] || '',
+                            hk: originalTranslations.hk?.[key] || '',
+                            zh: originalTranslations.zh?.[key] || ''
+                        };
+                        
+                        const current = {
+                            en: translations.en[key] || '',
+                            hk: translations.hk[key] || '',
+                            zh: translations.zh[key] || ''
+                        };
+                        
+                        // Check each locale for changes
+                        ['en', 'hk', 'zh'].forEach(locale => {
+                            if (original[locale] !== current[locale]) {
+                                changesByLocale[locale][key] = current[locale];
+                            }
+                        });
+                    });
+                    
+                    // Log changes grouped by locale
+                    ['en', 'hk', 'zh'].forEach(locale => {
+                        if (Object.keys(changesByLocale[locale]).length > 0) {
+                            console.log(`=== BACKUP - CHANGED KEYS - ${locale.toUpperCase()} ===`);
+                            console.log(JSON.stringify(changesByLocale[locale], null, 2));
+                            console.log(`=== END BACKUP ${locale.toUpperCase()} CHANGES ===`);
+                        }
+                    });
+                };
+                
+                logChangedKeys();
+                
                 const dataStr = JSON.stringify(translations, null, 2);
                 const dataBlob = new Blob([dataStr], { type: 'application/json' });
                 const url = URL.createObjectURL(dataBlob);
@@ -1194,34 +1236,54 @@
                 setOriginalTranslations(JSON.parse(JSON.stringify(translations)));
                 setModifiedKeys(new Set());
                 showToast('Translations saved successfully!');
-            }, [translations, showToast]);
+            }, [translations, originalTranslations, modifiedKeys, showToast]);
 
-            const handleExport = useCallback(() => {
-                // Helper function to create sorted JSON with minimal diffs
-                const createSortedJSON = (translations) => {
-                    const sorted = {};
-                    Object.keys(translations).sort().forEach(key => {
-                        sorted[key] = translations[key];
+            const handleExportToCSV = useCallback(() => {
+                // Helper function to create CSV content
+                const createCSV = () => {
+                    // Get all unique keys
+                    const allKeys = new Set([
+                        ...Object.keys(translations.en),
+                        ...Object.keys(translations.hk),
+                        ...Object.keys(translations.zh)
+                    ]);
+                    
+                    // Create CSV header
+                    const header = ['Key', 'English', 'Traditional Chinese (HK)', 'Simplified Chinese'];
+                    
+                    // Create CSV rows
+                    const rows = Array.from(allKeys).sort().map(key => {
+                        const en = (translations.en[key] || '').replace(/"/g, '""'); // Escape quotes
+                        const hk = (translations.hk[key] || '').replace(/"/g, '""');
+                        const zh = (translations.zh[key] || '').replace(/"/g, '""');
+                        
+                        return [
+                            `"${key}"`,
+                            `"${en}"`,
+                            `"${hk}"`,
+                            `"${zh}"`
+                        ];
                     });
-                    return JSON.stringify(sorted, null, 2);
+                    
+                    // Combine header and rows
+                    const csvContent = [header, ...rows]
+                        .map(row => row.join(','))
+                        .join('\n');
+                    
+                    return csvContent;
                 };
-
-                const files = {
-                    'en-HK-hk.json': createSortedJSON(translations.en),
-                    'hk-HK-hk.json': createSortedJSON(translations.hk),
-                    'zh-HK-hk.json': createSortedJSON(translations.zh)
-                };
-
-                Object.entries(files).forEach(([filename, content]) => {
-                    const blob = new Blob([content], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = filename;
-                    link.click();
-                });
-
-                showToast('Translation files exported!');
+                
+                console.log('Exporting translations to CSV...');
+                
+                const csvContent = createCSV();
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'translations.csv';
+                link.click();
+                
+                showToast('Translations exported to CSV!');
             }, [translations, showToast]);
 
             const handleExportToDirectory = useCallback(async () => {
@@ -1282,6 +1344,47 @@
                             return;
                         }
                         
+                        // Log detailed changes grouped by locale
+                        const logChangedKeys = () => {
+                            const changesByLocale = {
+                                en: {},
+                                hk: {},
+                                zh: {}
+                            };
+                            
+                            // Get all modified keys
+                            Array.from(modifiedKeys).forEach(key => {
+                                const original = {
+                                    en: originalTranslations.en?.[key] || '',
+                                    hk: originalTranslations.hk?.[key] || '',
+                                    zh: originalTranslations.zh?.[key] || ''
+                                };
+                                
+                                const current = {
+                                    en: translations.en[key] || '',
+                                    hk: translations.hk[key] || '',
+                                    zh: translations.zh[key] || ''
+                                };
+                                
+                                // Check each locale for changes
+                                ['en', 'hk', 'zh'].forEach(locale => {
+                                    if (original[locale] !== current[locale]) {
+                                        changesByLocale[locale][key] = current[locale];
+                                    }
+                                });
+                            });
+                            
+                            // Log changes grouped by locale
+                            ['en', 'hk', 'zh'].forEach(locale => {
+                                if (Object.keys(changesByLocale[locale]).length > 0) {
+                                    console.log(`=== CHANGED KEYS - ${locale.toUpperCase()} ===`);
+                                    console.log(JSON.stringify(changesByLocale[locale], null, 2));
+                                    console.log(`=== END ${locale.toUpperCase()} CHANGES ===`);
+                                }
+                            });
+                        };
+                        
+                        logChangedKeys();
                         console.log(`Files to export: ${changedFiles.map(f => f.lang).join(', ')} (${changedFiles.length}/${files.length} changed)`);
 
                         // Prevent page reload during export
@@ -1352,10 +1455,9 @@
                     }
                 } else {
                     // Fallback for browsers without File System Access API
-                    showToast('Directory selection not supported in this browser. Using regular download.', 'error');
-                    handleExport();
+                    showToast('Directory selection not supported in this browser. Try a different browser.', 'error');
                 }
-            }, [translations, config, showToast, handleExport, setOriginalTranslations, setModifiedKeys]);
+            }, [translations, config, showToast, setOriginalTranslations, setModifiedKeys]);
 
             const handleReset = useCallback(() => {
                 if (modifiedKeys.size === 0) {
@@ -1411,8 +1513,8 @@
                         searchValue=${searchValue}
                         onSearchChange=${setSearchValue}
                         onSave=${handleSave}
-                        onExport=${handleExport}
                         onExportToDirectory=${handleExportToDirectory}
+                        onExportToCSV=${handleExportToCSV}
                         onConfig=${handleShowConfig}
                         onReset=${handleReset}
                     />
