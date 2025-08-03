@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Translation Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            background: #fff;
+            border-bottom: 1px solid #e1e1e1;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #2980b9;
+        }
+
+        .btn.save {
+            background: #27ae60;
+        }
+
+        .btn.save:hover {
+            background: #229954;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .translation-grid {
+            display: grid;
+            grid-template-columns: 200px 1fr 1fr 1fr;
+            gap: 2px;
+            background: #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .header-cell {
+            background: #34495e;
+            color: white;
+            padding: 12px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .key-cell {
+            background: #ecf0f1;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            word-break: break-word;
+            border-right: 1px solid #bdc3c7;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            position: relative;
+            user-select: none;
+        }
+
+        .key-cell:hover {
+            background: #d5dbdb;
+            transform: scale(1.02);
+        }
+
+        .key-cell:active {
+            transform: scale(0.98);
+            background: #bdc3c7;
+        }
+
+        .key-cell::after {
+            content: '📋';
+            position: absolute;
+            top: 2px;
+            right: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 10px;
+        }
+
+        .key-cell:hover::after {
+            opacity: 0.7;
+        }
+
+        .key-copied {
+            background: #2ecc71 !important;
+            color: white;
+        }
+
+        .key-copied::after {
+            content: '✓';
+            opacity: 1 !important;
+            color: white;
+        }
+
+        .translation-cell {
+            background: white;
+            padding: 8px;
+            position: relative;
+        }
+
+        .translation-cell textarea {
+            width: 100%;
+            min-height: 40px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 14px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .translation-cell textarea:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+
+        .validation-warning {
+            border-color: #f39c12 !important;
+            background-color: #fef9e7 !important;
+        }
+
+        .validation-error {
+            border-color: #e74c3c !important;
+            background-color: #fdf2f2 !important;
+        }
+
+        .validation-indicator {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: help;
+        }
+
+        .validation-indicator.warning {
+            background: #f39c12;
+        }
+
+        .validation-indicator.error {
+            background: #e74c3c;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+            background: white;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .modified {
+            background-color: #fff3cd !important;
+            border-left: 4px solid #ffc107;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #27ae60;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toast.error {
+            background: #e74c3c;
+        }
+
+        .config-page {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .config-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .config-section h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+
+        .config-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn.secondary {
+            background: #95a5a6;
+        }
+
+        .btn.secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .path-preview {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal h2 {
+            color: #2c3e50;
+            margin-bottom: 16px;
+            font-size: 20px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 200px 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .form-row label {
+            font-weight: 500;
+            color: #555;
+        }
+
+        .form-row input {
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .excel-paste-area {
+            width: 100%;
+            min-height: 200px;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        .excel-paste-area:focus {
+            outline: none;
+            border-color: #3498db;
+            background: #f8f9fa;
+        }
+
+        .excel-instructions {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        .excel-instructions strong {
+            color: #1976d2;
+        }
+
+        .preview-table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 16px;
+            font-size: 14px;
+        }
+
+        .preview-table th,
+        .preview-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .preview-table th {
+            background: #f5f5f5;
+            font-weight: 500;
+        }
+
+        .stats-and-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            gap: 20px;
+        }
+
+        .add-item-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .translation-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header-cell:first-child {
+                display: none;
+            }
+            
+            .key-cell {
+                border-right: none;
+                border-bottom: 1px solid #bdc3c7;
+                background: #2c3e50;
+                color: white;
+                font-weight: bold;
+            }
+
+            .stats-and-controls {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+
+            .add-item-controls {
+                width: 100%;
+                justify-content: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script type="module">
+        import { render, h } from 'https://esm.sh/preact@10.19.3';
+        import { useState, useEffect, useCallback } from 'https://esm.sh/preact@10.19.3/hooks';
+        import htm from 'https://esm.sh/htm@3.1.1';
+
+        const html = htm.bind(h);
+
+        // Toast Component
+        const Toast = ({ message, type, show, onHide }) => {
+            useEffect(() => {
+                if (show) {
+                    const timer = setTimeout(onHide, 3000);
+                    return () => clearTimeout(timer);
+                }
+            }, [show, onHide]);
+
+            return html`
+                <div class="toast ${show ? 'show' : ''} ${type === 'error' ? 'error' : ''}">
+                    ${message}
+                </div>
+            `;
+        };
+
+        // Stats Component
+        const Stats = ({ totalKeys, modifiedKeys, filteredKeys, validationErrors }) => {
+            return html`
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-number">${totalKeys}</div>
+                        <div class="stat-label">Total Keys</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${modifiedKeys}</div>
+                        <div class="stat-label">Modified</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" style="color: ${validationErrors > 0 ? '#e74c3c' : '#3498db'}">${validationErrors}</div>
+                        <div class="stat-label">Errors</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${filteredKeys}</div>
+                        <div class="stat-label">Showing</div>
+                    </div>
+                </div>
+            `;
+        };
+
+        // Translation Row Component
+        const TranslationRow = ({ translationKey, translations, onUpdate, isModified, onShowToast }) => {
+            const [keyCopied, setKeyCopied] = useState(false);
+
+            const handleChange = (lang, value) => {
+                onUpdate(translationKey, lang, value);
+            };
+
+            const handleKeyClick = async () => {
+                try {
+                    await navigator.clipboard.writeText(translationKey);
+                    setKeyCopied(true);
+                    onShowToast(`Key "${translationKey}" copied to clipboard!`);
+                    
+                    // Reset the copied state after 2 seconds
+                    setTimeout(() => {
+                        setKeyCopied(false);
+                    }, 2000);
+                } catch (error) {
+                    console.error('Failed to copy key:', error);
+                    // Fallback for older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = translationKey;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        setKeyCopied(true);
+                        onShowToast(`Key "${translationKey}" copied to clipboard!`);
+                        setTimeout(() => {
+                            setKeyCopied(false);
+                        }, 2000);
+                    } catch (fallbackError) {
+                        onShowToast('Failed to copy key to clipboard', 'error');
+                    }
+                    document.body.removeChild(textArea);
+                }
+            };
+
+            // Validate each translation
+            const enValidation = validateCharacters(translations.en[translationKey] || '', 'en');
+            const hkValidation = validateCharacters(translations.hk[translationKey] || '', 'hk');
+            const zhValidation = validateCharacters(translations.zh[translationKey] || '', 'zh');
+
+            const getValidationClass = (validation) => {
+                if (!validation.isValid) {
+                    return 'validation-error';
+                }
+                return '';
+            };
+
+            const getValidationIndicator = (validation) => {
+                if (!validation.isValid) {
+                    return html`
+                        <div 
+                            class="validation-indicator error" 
+                            title=${validation.errors.join('; ')}
+                        >!</div>
+                    `;
+                }
+                return '';
+            };
+
+            return html`
+                <div 
+                    class="key-cell ${isModified ? 'modified' : ''} ${keyCopied ? 'key-copied' : ''}"
+                    onClick=${handleKeyClick}
+                    title="Click to copy key to clipboard"
+                >${translationKey}</div>
+                <div class="translation-cell ${isModified ? 'modified' : ''}">
+                    <textarea 
+                        value=${translations.en[translationKey] || ''}
+                        onInput=${(e) => handleChange('en', e.target.value)}
+                        class=${getValidationClass(enValidation)}
+                    />
+                    ${getValidationIndicator(enValidation)}
+                </div>
+                <div class="translation-cell ${isModified ? 'modified' : ''}">
+                    <textarea 
+                        value=${translations.hk[translationKey] || ''}
+                        onInput=${(e) => handleChange('hk', e.target.value)}
+                        class=${getValidationClass(hkValidation)}
+                    />
+                    ${getValidationIndicator(hkValidation)}
+                </div>
+                <div class="translation-cell ${isModified ? 'modified' : ''}">
+                    <textarea 
+                        value=${translations.zh[translationKey] || ''}
+                        onInput=${(e) => handleChange('zh', e.target.value)}
+                        class=${getValidationClass(zhValidation)}
+                    />
+                    ${getValidationIndicator(zhValidation)}
+                </div>
+            `;
+        };
+
+        // Add New Item Modal
+        const AddItemModal = ({ onClose, onAdd }) => {
+            const [newItem, setNewItem] = useState({
+                key: '',
+                en: '',
+                hk: '',
+                zh: ''
+            });
+
+            const handleAdd = () => {
+                if (!newItem.key.trim()) {
+                    alert('Please enter a key for the translation item');
+                    return;
+                }
+                onAdd(newItem);
+                onClose();
+                setNewItem({ key: '', en: '', hk: '', zh: '' });
+            };
+
+            const handleOverlayClick = (e) => {
+                if (e.target === e.currentTarget) {
+                    onClose();
+                }
+            };
+
+            return html`
+                <div class="modal-overlay" onClick=${handleOverlayClick}>
+                    <div class="modal">
+                        <h2>Add New Translation Item</h2>
+                        
+                        <div class="form-row">
+                            <label>Key:</label>
+                            <input 
+                                type="text" 
+                                value=${newItem.key}
+                                onInput=${(e) => setNewItem(prev => ({ ...prev, key: e.target.value }))}
+                                placeholder="e.g. newButton"
+                                style="grid-column: 2 / -1;"
+                            />
+                        </div>
+                        
+                        <div class="form-row">
+                            <label>English:</label>
+                            <input 
+                                type="text" 
+                                value=${newItem.en}
+                                onInput=${(e) => setNewItem(prev => ({ ...prev, en: e.target.value }))}
+                                placeholder="English translation"
+                                style="grid-column: 2 / -1;"
+                            />
+                        </div>
+                        
+                        <div class="form-row">
+                            <label>Traditional Chinese:</label>
+                            <input 
+                                type="text" 
+                                value=${newItem.hk}
+                                onInput=${(e) => setNewItem(prev => ({ ...prev, hk: e.target.value }))}
+                                placeholder="繁體中文翻譯"
+                                style="grid-column: 2 / -1;"
+                            />
+                        </div>
+                        
+                        <div class="form-row">
+                            <label>Simplified Chinese:</label>
+                            <input 
+                                type="text" 
+                                value=${newItem.zh}
+                                onInput=${(e) => setNewItem(prev => ({ ...prev, zh: e.target.value }))}
+                                placeholder="简体中文翻译"
+                                style="grid-column: 2 / -1;"
+                            />
+                        </div>
+
+                        <div class="modal-actions">
+                            <button class="btn secondary" onClick=${onClose}>Cancel</button>
+                            <button class="btn" onClick=${handleAdd}>Add Item</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        // Excel Paste Modal
+        const ExcelPasteModal = ({ onClose, onPaste }) => {
+            const [pasteData, setPasteData] = useState('');
+            const [previewData, setPreviewData] = useState([]);
+
+            const parseExcelData = (data) => {
+                const lines = data.trim().split('\n');
+                const items = [];
+                
+                for (const line of lines) {
+                    // Split by tab (Excel copy format) or comma (CSV format)
+                    const parts = line.split('\t').length > 1 ? line.split('\t') : line.split(',');
+                    
+                    if (parts.length >= 4) {
+                        const [key, en, hk, zh] = parts.map(part => part.trim().replace(/"/g, ''));
+                        if (key) {
+                            items.push({ key, en, hk, zh });
+                        }
+                    }
+                }
+                
+                return items;
+            };
+
+            const handlePasteChange = (e) => {
+                const data = e.target.value;
+                setPasteData(data);
+                
+                if (data.trim()) {
+                    const parsed = parseExcelData(data);
+                    setPreviewData(parsed);
+                } else {
+                    setPreviewData([]);
+                }
+            };
+
+            const handlePaste = () => {
+                if (previewData.length === 0) {
+                    alert('No valid data to import. Please check the format.');
+                    return;
+                }
+                onPaste(previewData);
+                onClose();
+                setPasteData('');
+                setPreviewData([]);
+            };
+
+            const handleOverlayClick = (e) => {
+                if (e.target === e.currentTarget) {
+                    onClose();
+                }
+            };
+
+            return html`
+                <div class="modal-overlay" onClick=${handleOverlayClick}>
+                    <div class="modal">
+                        <h2>Paste from Excel</h2>
+                        
+                        <div class="excel-instructions">
+                            <strong>Instructions:</strong><br/>
+                            1. In Excel, select your data with columns: Key, English, Traditional Chinese, Simplified Chinese<br/>
+                            2. Copy the selection (Ctrl+C)<br/>
+                            3. Paste it in the text area below (Ctrl+V)<br/>
+                            4. Review the preview and click "Import Items"
+                        </div>
+
+                        <textarea 
+                            class="excel-paste-area"
+                            value=${pasteData}
+                            onInput=${handlePasteChange}
+                            placeholder="Paste your Excel data here...&#10;&#10;Example format:&#10;key1&#9;Hello&#9;你好&#9;你好&#10;key2&#9;Goodbye&#9;再見&#9;再见"
+                        ></textarea>
+
+                        ${previewData.length > 0 ? html`
+                            <h3>Preview (${previewData.length} items):</h3>
+                            <table class="preview-table">
+                                <thead>
+                                    <tr>
+                                        <th>Key</th>
+                                        <th>English</th>
+                                        <th>Traditional Chinese</th>
+                                        <th>Simplified Chinese</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${previewData.slice(0, 5).map(item => html`
+                                        <tr>
+                                            <td>${item.key}</td>
+                                            <td>${item.en}</td>
+                                            <td>${item.hk}</td>
+                                            <td>${item.zh}</td>
+                                        </tr>
+                                    `)}
+                                    ${previewData.length > 5 ? html`
+                                        <tr>
+                                            <td colspan="4" style="text-align: center; font-style: italic; color: #666;">
+                                                ... and ${previewData.length - 5} more items
+                                            </td>
+                                        </tr>
+                                    ` : ''}
+                                </tbody>
+                            </table>
+                        ` : ''}
+
+                        <div class="modal-actions">
+                            <button class="btn secondary" onClick=${onClose}>Cancel</button>
+                            <button 
+                                class="btn" 
+                                onClick=${handlePaste}
+                                disabled=${previewData.length === 0}
+                            >
+                                Import ${previewData.length} Items
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        // Config Component
+        const ConfigPage = ({ config, onConfigChange, onBack }) => {
+            const [tempConfig, setTempConfig] = useState(config);
+
+            const handleSave = () => {
+                onConfigChange(tempConfig);
+                onBack();
+            };
+
+            const handleReset = () => {
+                const defaultConfig = {
+                    paths: {
+                        en: './src/translation/en/HK/hk.json',
+                        hk: './src/translation/hk/HK/hk.json',
+                        zh: './src/translation/zh/HK/hk.json'
+                    }
+                };
+                setTempConfig(defaultConfig);
+            };
+
+            return html`
+                <div>
+                    <div class="header">
+                        <h1>Configuration</h1>
+                        <div class="controls">
+                            <button class="btn secondary" onClick=${onBack}>Back to Editor</button>
+                        </div>
+                    </div>
+                    
+                    <div class="config-page">
+                        <div class="config-section">
+                            <h2>Translation File Paths</h2>
+                            <p style="margin-bottom: 20px; color: #666;">
+                                Configure the paths to your translation JSON files. Export paths will be automatically inferred from these load paths.
+                            </p>
+                            
+                            <div class="form-group">
+                                <label for="en-path">English Translation File</label>
+                                <input 
+                                    id="en-path"
+                                    type="text" 
+                                    value=${tempConfig.paths.en}
+                                    onInput=${(e) => setTempConfig(prev => ({
+                                        ...prev,
+                                        paths: { ...prev.paths, en: e.target.value }
+                                    }))}
+                                    placeholder="./src/translation/en/HK/hk.json"
+                                />
+                                <div class="path-preview">Load from: ${tempConfig.paths.en}</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="hk-path">Traditional Chinese (HK) Translation File</label>
+                                <input 
+                                    id="hk-path"
+                                    type="text" 
+                                    value=${tempConfig.paths.hk}
+                                    onInput=${(e) => setTempConfig(prev => ({
+                                        ...prev,
+                                        paths: { ...prev.paths, hk: e.target.value }
+                                    }))}
+                                    placeholder="./src/translation/hk/HK/hk.json"
+                                />
+                                <div class="path-preview">Load from: ${tempConfig.paths.hk}</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="zh-path">Simplified Chinese Translation File</label>
+                                <input 
+                                    id="zh-path"
+                                    type="text" 
+                                    value=${tempConfig.paths.zh}
+                                    onInput=${(e) => setTempConfig(prev => ({
+                                        ...prev,
+                                        paths: { ...prev.paths, zh: e.target.value }
+                                    }))}
+                                    placeholder="./src/translation/zh/HK/hk.json"
+                                />
+                                <div class="path-preview">Load from: ${tempConfig.paths.zh}</div>
+                            </div>
+
+                            <div class="config-actions">
+                                <button class="btn" onClick=${handleSave}>Save Configuration</button>
+                                <button class="btn secondary" onClick=${handleReset}>Reset to Default</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        // Header Component
+        const Header = ({ searchValue, onSearchChange, onSave, onExport, onExportToDirectory, onReset, onConfig }) => {
+            return html`
+                <div class="header">
+                    <h1>Translation Editor</h1>
+                    <div class="controls">
+                        <div class="search-box">
+                            <input 
+                                type="text" 
+                                placeholder="Search by key or English translation..." 
+                                value=${searchValue}
+                                onInput=${(e) => onSearchChange(e.target.value)}
+                            />
+                        </div>
+                        <button class="btn save" onClick=${onSave}>Save All</button>
+                        <button class="btn" onClick=${onExport}>Export JSON</button>
+                        <button class="btn" onClick=${onExportToDirectory}>Export to Directory</button>
+                        <button class="btn secondary" onClick=${onConfig}>Config</button>
+                        <button class="btn" onClick=${onReset}>Reset Changes</button>
+                    </div>
+                </div>
+            `;
+        };
+
+        // Character validation functions
+        const validateCharacters = (text, language) => {
+            if (!text) return { isValid: true, errors: [] };
+
+            const chinesePunctuation = /[。，、；：？！（）【】《》""'']/;
+            const englishPunctuation = /[.,;:?!()\[\]<>"']/;
+            
+            const errors = [];
+            
+            if (language === 'en') {
+                // Check for Chinese punctuation in English text
+                const matches = text.match(chinesePunctuation);
+                if (matches) {
+                    errors.push(`Chinese punctuation found: ${[...new Set(matches)].join(', ')}`);
+                }
+            } else if (language === 'hk' || language === 'zh') {
+                // Check for English punctuation in Chinese text
+                const matches = text.match(englishPunctuation);
+                if (matches) {
+                    errors.push(`English punctuation found: ${[...new Set(matches)].join(', ')}`);
+                }
+            }
+            
+            return {
+                isValid: errors.length === 0,
+                errors: errors
+            };
+        };
+
+        // Main App Component
+        const App = () => {
+            // Load config from localStorage or use defaults
+            const getInitialConfig = () => {
+                try {
+                    const saved = localStorage.getItem('translationEditorConfig');
+                    if (saved) {
+                        return JSON.parse(saved);
+                    }
+                } catch (error) {
+                    console.error('Error loading config from localStorage:', error);
+                }
+                return {
+                    paths: {
+                        en: './src/translation/en/HK/hk.json',
+                        hk: './src/translation/hk/HK/hk.json',
+                        zh: './src/translation/zh/HK/hk.json'
+                    }
+                };
+            };
+
+            const [config, setConfig] = useState(getInitialConfig);
+            const [showConfig, setShowConfig] = useState(false);
+            const [showAddItem, setShowAddItem] = useState(false);
+            const [showExcelPaste, setShowExcelPaste] = useState(false);
+            const [translations, setTranslations] = useState({
+                en: {},
+                hk: {},
+                zh: {}
+            });
+            const [originalTranslations, setOriginalTranslations] = useState({});
+            const [modifiedKeys, setModifiedKeys] = useState(new Set());
+            const [searchValue, setSearchValue] = useState('');
+            const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+            // Load translations
+            useEffect(() => {
+                const loadTranslations = async () => {
+                    try {
+                        const [enRes, hkRes, zhRes] = await Promise.all([
+                            fetch(config.paths.en),
+                            fetch(config.paths.hk),
+                            fetch(config.paths.zh)
+                        ]);
+
+                        const enData = await enRes.json();
+                        const hkData = await hkRes.json();
+                        const zhData = await zhRes.json();
+
+                        const newTranslations = {
+                            en: enData,
+                            hk: hkData,
+                            zh: zhData
+                        };
+
+                        setTranslations(newTranslations);
+                        setOriginalTranslations(JSON.parse(JSON.stringify(newTranslations)));
+                    } catch (error) {
+                        console.error('Error loading translations:', error);
+                        showToast('Error loading translation files. Check your configuration.', 'error');
+                    }
+                };
+
+                loadTranslations();
+            }, [config]);
+
+            const showToast = useCallback((message, type = 'success') => {
+                setToast({ show: true, message, type });
+            }, []);
+
+            const hideToast = useCallback(() => {
+                setToast(prev => ({ ...prev, show: false }));
+            }, []);
+
+            // Config handlers
+            const handleConfigChange = useCallback((newConfig) => {
+                setConfig(newConfig);
+                try {
+                    localStorage.setItem('translationEditorConfig', JSON.stringify(newConfig));
+                    showToast('Configuration saved!');
+                } catch (error) {
+                    console.error('Error saving config to localStorage:', error);
+                    showToast('Error saving configuration', 'error');
+                }
+            }, [showToast]);
+
+            const handleShowConfig = useCallback(() => {
+                setShowConfig(true);
+            }, []);
+
+            const handleHideConfig = useCallback(() => {
+                setShowConfig(false);
+            }, []);
+
+            // Add new item handlers
+            const handleShowAddItem = useCallback(() => {
+                setShowAddItem(true);
+            }, []);
+
+            const handleHideAddItem = useCallback(() => {
+                setShowAddItem(false);
+            }, []);
+
+            const handleAddNewItem = useCallback((newItem) => {
+                // Check if key already exists
+                const allKeys = new Set([
+                    ...Object.keys(translations.en),
+                    ...Object.keys(translations.hk),
+                    ...Object.keys(translations.zh)
+                ]);
+
+                if (allKeys.has(newItem.key)) {
+                    showToast(`Key "${newItem.key}" already exists. Please use a different key.`, 'error');
+                    return;
+                }
+
+                // Add the new item to all language translations
+                setTranslations(prev => ({
+                    en: { ...prev.en, [newItem.key]: newItem.en },
+                    hk: { ...prev.hk, [newItem.key]: newItem.hk },
+                    zh: { ...prev.zh, [newItem.key]: newItem.zh }
+                }));
+
+                // Mark as modified
+                setModifiedKeys(prev => new Set([...prev, newItem.key]));
+                
+                showToast('New translation item added successfully!');
+            }, [translations, showToast]);
+
+            // Excel paste handlers
+            const handleShowExcelPaste = useCallback(() => {
+                setShowExcelPaste(true);
+            }, []);
+
+            const handleHideExcelPaste = useCallback(() => {
+                setShowExcelPaste(false);
+            }, []);
+
+            const handlePasteFromExcel = useCallback((items) => {
+                const allKeys = new Set([
+                    ...Object.keys(translations.en),
+                    ...Object.keys(translations.hk),
+                    ...Object.keys(translations.zh)
+                ]);
+
+                const duplicateKeys = items.filter(item => allKeys.has(item.key)).map(item => item.key);
+                const newItems = items.filter(item => !allKeys.has(item.key));
+
+                if (duplicateKeys.length > 0 && newItems.length === 0) {
+                    showToast(`All keys already exist: ${duplicateKeys.join(', ')}`, 'error');
+                    return;
+                }
+
+                if (duplicateKeys.length > 0) {
+                    const proceed = confirm(`${duplicateKeys.length} keys already exist and will be skipped: ${duplicateKeys.slice(0, 3).join(', ')}${duplicateKeys.length > 3 ? '...' : ''}. Continue with ${newItems.length} new items?`);
+                    if (!proceed) return;
+                }
+
+                // Add new items to translations
+                const newTranslations = { ...translations };
+                const newModifiedKeys = new Set(modifiedKeys);
+
+                newItems.forEach(item => {
+                    newTranslations.en[item.key] = item.en;
+                    newTranslations.hk[item.key] = item.hk;
+                    newTranslations.zh[item.key] = item.zh;
+                    newModifiedKeys.add(item.key);
+                });
+
+                setTranslations(newTranslations);
+                setModifiedKeys(newModifiedKeys);
+
+                showToast(`Successfully imported ${newItems.length} translation items!`);
+            }, [translations, modifiedKeys, showToast]);
+
+            const handleTranslationUpdate = useCallback((key, lang, value) => {
+                setTranslations(prev => ({
+                    ...prev,
+                    [lang]: {
+                        ...prev[lang],
+                        [key]: value
+                    }
+                }));
+
+                // Check if this key should be marked as modified
+                setModifiedKeys(prev => {
+                    const newModified = new Set(prev);
+                    
+                    // Check if any language for this key differs from original
+                    const isModified = ['en', 'hk', 'zh'].some(l => {
+                        const currentValue = l === lang ? value : translations[l][key] || '';
+                        const originalValue = originalTranslations[l]?.[key] || '';
+                        return currentValue !== originalValue;
+                    });
+
+                    if (isModified) {
+                        newModified.add(key);
+                    } else {
+                        newModified.delete(key);
+                    }
+
+                    return newModified;
+                });
+            }, [translations, originalTranslations]);
+
+            const handleSave = useCallback(() => {
+                const dataStr = JSON.stringify(translations, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'translations-backup.json';
+                link.click();
+                
+                setOriginalTranslations(JSON.parse(JSON.stringify(translations)));
+                setModifiedKeys(new Set());
+                showToast('Translations saved successfully!');
+            }, [translations, showToast]);
+
+            const handleExport = useCallback(() => {
+                const files = {
+                    'en-HK-hk.json': JSON.stringify(translations.en, null, 2),
+                    'hk-HK-hk.json': JSON.stringify(translations.hk, null, 2),
+                    'zh-HK-hk.json': JSON.stringify(translations.zh, null, 2)
+                };
+
+                Object.entries(files).forEach(([filename, content]) => {
+                    const blob = new Blob([content], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = filename;
+                    link.click();
+                });
+
+                showToast('Translation files exported!');
+            }, [translations, showToast]);
+
+            const handleExportToDirectory = useCallback(async () => {
+                // Check if File System Access API is supported
+                if ('showDirectoryPicker' in window) {
+                    try {
+                        const dirHandle = await window.showDirectoryPicker();
+                        
+                        // Infer export paths from config load paths (remove ./ prefix if present)
+                        const getExportPath = (loadPath) => {
+                            return loadPath.startsWith('./') ? loadPath.slice(2) : loadPath;
+                        };
+
+                        const files = [
+                            { path: getExportPath(config.paths.en), content: JSON.stringify(translations.en, null, 2) },
+                            { path: getExportPath(config.paths.hk), content: JSON.stringify(translations.hk, null, 2) },
+                            { path: getExportPath(config.paths.zh), content: JSON.stringify(translations.zh, null, 2) }
+                        ];
+
+                        for (const file of files) {
+                            // Create nested directories if needed
+                            const pathParts = file.path.split('/');
+                            const fileName = pathParts.pop();
+                            
+                            let currentDir = dirHandle;
+                            for (const part of pathParts) {
+                                try {
+                                    currentDir = await currentDir.getDirectoryHandle(part, { create: true });
+                                } catch (error) {
+                                    console.error(`Error creating directory ${part}:`, error);
+                                }
+                            }
+
+                            // Write the file
+                            const fileHandle = await currentDir.getFileHandle(fileName, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(file.content);
+                            await writable.close();
+                        }
+
+                        showToast('Files exported to selected directory!');
+                        
+                        // Update original translations since we've "saved" them
+                        setOriginalTranslations(JSON.parse(JSON.stringify(translations)));
+                        setModifiedKeys(new Set());
+                        
+                    } catch (error) {
+                        if (error.name === 'AbortError') {
+                            showToast('Export cancelled', 'error');
+                        } else {
+                            console.error('Error exporting to directory:', error);
+                            showToast('Error exporting to directory', 'error');
+                        }
+                    }
+                } else {
+                    // Fallback for browsers without File System Access API
+                    showToast('Directory selection not supported in this browser. Using regular download.', 'error');
+                    handleExport();
+                }
+            }, [translations, config, showToast, handleExport, setOriginalTranslations, setModifiedKeys]);
+
+            const handleReset = useCallback(() => {
+                if (modifiedKeys.size === 0) {
+                    showToast('No changes to reset');
+                    return;
+                }
+
+                if (confirm('Are you sure you want to reset all changes?')) {
+                    setTranslations(JSON.parse(JSON.stringify(originalTranslations)));
+                    setModifiedKeys(new Set());
+                    showToast('Changes reset successfully');
+                }
+            }, [modifiedKeys, originalTranslations, showToast]);
+
+            // Get all unique keys
+            const allKeys = new Set([
+                ...Object.keys(translations.en),
+                ...Object.keys(translations.hk),
+                ...Object.keys(translations.zh)
+            ]);
+
+            // Filter keys based on search (key and English only)
+            const filteredKeys = Array.from(allKeys).filter(key => 
+                key.toLowerCase().includes(searchValue.toLowerCase()) ||
+                (translations.en[key] || '').toLowerCase().includes(searchValue.toLowerCase())
+            ).sort();
+
+            // Calculate validation errors
+            const validationErrorCount = Array.from(allKeys).reduce((count, key) => {
+                const enValidation = validateCharacters(translations.en[key] || '', 'en');
+                const hkValidation = validateCharacters(translations.hk[key] || '', 'hk');
+                const zhValidation = validateCharacters(translations.zh[key] || '', 'zh');
+                
+                if (!enValidation.isValid || !hkValidation.isValid || !zhValidation.isValid) {
+                    count++;
+                }
+                return count;
+            }, 0);
+
+            if (showConfig) {
+                return html`
+                    <${ConfigPage}
+                        config=${config}
+                        onConfigChange=${handleConfigChange}
+                        onBack=${handleHideConfig}
+                    />
+                `;
+            }
+
+            return html`
+                <div>
+                    <${Header} 
+                        searchValue=${searchValue}
+                        onSearchChange=${setSearchValue}
+                        onSave=${handleSave}
+                        onExport=${handleExport}
+                        onExportToDirectory=${handleExportToDirectory}
+                        onConfig=${handleShowConfig}
+                        onReset=${handleReset}
+                    />
+                    
+                    <div class="container">
+                        <div class="stats-and-controls">
+                            <${Stats} 
+                                totalKeys=${allKeys.size}
+                                modifiedKeys=${modifiedKeys.size}
+                                filteredKeys=${filteredKeys.length}
+                                validationErrors=${validationErrorCount}
+                            />
+                            
+                            <div class="add-item-controls">
+                                <button class="btn" onClick=${handleShowAddItem}>Add New Item</button>
+                                <button class="btn" onClick=${handleShowExcelPaste}>Paste from Excel</button>
+                            </div>
+                        </div>
+
+                        ${filteredKeys.length === 0 ? html`
+                            <div class="no-results">
+                                No translations found matching your search.
+                            </div>
+                        ` : html`
+                            <div class="translation-grid">
+                                <div class="header-cell">Key</div>
+                                <div class="header-cell">English</div>
+                                <div class="header-cell">Traditional Chinese (HK)</div>
+                                <div class="header-cell">Simplified Chinese</div>
+                                
+                                ${filteredKeys.map(key => html`
+                                    <${TranslationRow}
+                                        key=${key}
+                                        translationKey=${key}
+                                        translations=${translations}
+                                        onUpdate=${handleTranslationUpdate}
+                                        isModified=${modifiedKeys.has(key)}
+                                        onShowToast=${showToast}
+                                    />
+                                `)}
+                            </div>
+                        `}
+                    </div>
+
+                    <${Toast} 
+                        message=${toast.message}
+                        type=${toast.type}
+                        show=${toast.show}
+                        onHide=${hideToast}
+                    />
+
+                    ${showAddItem ? html`
+                        <${AddItemModal}
+                            onClose=${handleHideAddItem}
+                            onAdd=${handleAddNewItem}
+                        />
+                    ` : ''}
+
+                    ${showExcelPaste ? html`
+                        <${ExcelPasteModal}
+                            onClose=${handleHideExcelPaste}
+                            onPaste=${handlePasteFromExcel}
+                        />
+                    ` : ''}
+                </div>
+            `;
+        };
+
+        render(html`<${App} />`, document.getElementById('app'));
+    </script>
+</body>
+</html>
